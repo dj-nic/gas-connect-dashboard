@@ -1,0 +1,107 @@
+name: Build and publish
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python scripts/privacy_check.py
+      - run: bash -n install.sh scripts/flash.sh firmware/scripts/build.sh
+      - run: node --check app/static/app.js && node --check docs/installer.js
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/partitions.csv') }}
+      - run: pip install platformio==6.1.18
+      - run: bash firmware/scripts/build.sh
+      - run: python scripts/privacy_check.py firmware/dist/factory.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            firmware/dist/factory.bin
+            firmware/dist/SHA256SUMS
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t gas-connect:test .
+      - run: |
+          docker run -d --name gas-test -v gas-ci-data:/data -v "$PWD/tests:/tests:ro" gas-connect:test
+          for i in $(seq 1 60); do
+            if [ "$(docker inspect gas-test --format '{{.State.Health.Status}}')" = healthy ]; then break; fi
+            sleep 2
+          done
+          test "$(docker inspect gas-test --format '{{.State.Health.Status}}')" = healthy
+          docker exec gas-test python /tests/integration.py first
+          docker restart gas-test
+          sleep 4
+          docker exec gas-test python /tests/integration.py replay
+      - if: always()
+        run: docker rm -f gas-test || true
+  pages:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [checks, firmware, container]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: docs/firmware
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - uses: actions/deploy-pages@v4
+        id: deployment
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [checks, firmware, container]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: dist
+      - run: |
+          test "$GITHUB_REF_NAME" = "v$(cat VERSION)"
+          python scripts/release_package.py --artifacts dist
+          gh release create "$GITHUB_REF_NAME" dist/factory.bin dist/SHA256SUMS dist/*.zip --title "Gas Connect $GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

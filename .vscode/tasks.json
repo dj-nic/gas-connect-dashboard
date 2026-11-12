@@ -1,0 +1,4 @@
+{"version":"2.0.0","tasks":[
+{"label":"ESP: Flash-Assistent","type":"process","command":"bash","args":["scripts/flash.sh"],"windows":{"command":"cmd.exe","args":["/d","/c","scripts\\flash.cmd"]},"options":{"cwd":"${workspaceFolder}"},"presentation":{"reveal":"always","panel":"new","focus":true},"problemMatcher":[]},
+{"label":"ESP: Ports auflisten","type":"process","command":"bash","args":["scripts/flash.sh","--list-ports"],"windows":{"command":"cmd.exe","args":["/d","/c","scripts\\flash.cmd","--list-ports"]},"options":{"cwd":"${workspaceFolder}"},"presentation":{"reveal":"always","panel":"new"},"problemMatcher":[]},
+{"label":"ESP: Neu angeschlossenes Gerät erkennen","type":"process","command":"bash","args":["scripts/flash.sh","--detect"],"windows":{"command":"cmd.exe","args":["/d","/c","scripts\\flash.cmd","--detect"]},"options":{"cwd":"${workspaceFolder}"},"presentation":{"reveal":"always","panel":"new","focus":true},"problemMatcher":[]}]}

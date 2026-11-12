@@ -1,0 +1,12 @@
+.git
+data
+.env
+firmware
+tests
+dist
+docs
+scripts
+.github
+.vscode
+.flash-venv
+.flash-cache

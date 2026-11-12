@@ -1,0 +1,14 @@
+.env
+.env.backup
+data/
+firmware/.pio/
+__pycache__/
+*.pyc
+dist/
+.venv/
+work/
+.flash-venv/
+.flash-cache/
+firmware/factory.bin
+firmware/SHA256SUMS
+.gas-connect-install
